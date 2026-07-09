@@ -1,0 +1,11 @@
+.git
+.local-dev
+.codex
+.agents
+node_modules
+dist
+.env
+backend/.env
+frontend/node_modules
+frontend/dist
+frontend/tsconfig.tsbuildinfo
