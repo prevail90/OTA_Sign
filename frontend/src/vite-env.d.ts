@@ -4,5 +4,6 @@ interface Window {
   __OTASIGN_CONFIG__?: {
     apiBaseUrl?: string;
     moodleLoginUrl?: string;
+    moodleLaunchUrl?: string;
   };
 }

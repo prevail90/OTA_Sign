@@ -19,6 +19,8 @@ const runtimeConfig = window.__OTASIGN_CONFIG__ ?? {};
 const API_BASE = runtimeConfig.apiBaseUrl ?? import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 const MOODLE_LOGIN_URL =
   runtimeConfig.moodleLoginUrl ?? import.meta.env.VITE_MOODLE_LOGIN_URL ?? 'http://localhost:8081/login/index.php';
+const MOODLE_LAUNCH_URL =
+  runtimeConfig.moodleLaunchUrl ?? import.meta.env.VITE_MOODLE_LAUNCH_URL ?? MOODLE_LOGIN_URL;
 const REFRESH_INTERVAL_MS = 12000;
 const THEME_STORAGE_KEY = 'otasign-theme';
 
@@ -243,8 +245,8 @@ function App() {
           <ShieldCheck size={34} />
           <h1>Launch Required</h1>
           <p>{error}</p>
-          <a className="primaryLink" href={MOODLE_LOGIN_URL}>
-            Open Moodle
+          <a className="primaryLink" href={MOODLE_LAUNCH_URL}>
+            Launch From Moodle
           </a>
         </section>
       </main>

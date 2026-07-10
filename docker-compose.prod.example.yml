@@ -55,6 +55,7 @@ services:
       # Browser-facing API base. Frontend nginx proxies /api, /launch, /webhooks, /healthz, and /readyz to otasign-backend.
       OTASIGN_API_BASE_URL: ${OTASIGN_FRONTEND_URL:?set OTASIGN_FRONTEND_URL}
       OTASIGN_MOODLE_LOGIN_URL: ${MOODLE_LOGIN_URL:?set MOODLE_LOGIN_URL}
+      OTASIGN_MOODLE_LAUNCH_URL: ${MOODLE_OTA_SIGN_LAUNCH_URL:?set MOODLE_OTA_SIGN_LAUNCH_URL}
     expose:
       - "80"
     healthcheck:
