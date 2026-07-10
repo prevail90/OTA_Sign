@@ -16,8 +16,10 @@ OTA Sign production has these critical dependencies:
 
 1. Push a committed branch to GitHub.
 2. Confirm CI passes for backend, frontend, and Moodle plugin checks.
-3. Confirm GHCR images exist for the intended `OTASIGN_IMAGE_TAG`.
-4. Set production stack variables in Portainer or the deployment environment:
+3. Create and push a version tag such as `v1.0.0`.
+4. Confirm GHCR images exist for the intended `OTASIGN_IMAGE_TAG`.
+5. Confirm the Moodle plugin zip is attached to the GitHub Release as `otasignconnector-vX.Y.Z.zip`.
+6. Set production stack variables in Portainer or the deployment environment:
    - `OTASIGN_IMAGE_TAG`
    - `OTASIGN_FRONTEND_URL`
    - `MOODLE_LOGIN_URL`
@@ -30,11 +32,28 @@ OTA Sign production has these critical dependencies:
    - `DOCUSEAL_WEBHOOK_SECRET`
    - `NOTIFICATION_WEBHOOK_URL` if used
    - `NOTIFICATION_WEBHOOK_SECRET` if used
-5. Deploy `docker-compose.prod.example.yml` as the production stack.
-6. Confirm `/readyz` returns `200`.
-7. Confirm `/healthz/full` reports database and DocuSeal status.
-8. Launch from Moodle with a test account.
-9. Create a DocuSeal submission, complete it, receive the webhook, and download the completed PDF through OTA Sign.
+7. Deploy `docker-compose.prod.example.yml` as the production stack.
+8. Confirm `/readyz` returns `200`.
+9. Confirm `/healthz/full` reports database and DocuSeal status.
+10. Launch from Moodle with a test account.
+11. Create a DocuSeal submission, complete it, receive the webhook, and download the completed PDF through OTA Sign.
+
+## Moodle Plugin Release
+
+Pushing a version tag packages `moodle/local_otasignconnector` as a Moodle-ready zip with this layout:
+
+```text
+otasignconnector/
+  version.php
+  launch.php
+  ...
+```
+
+The release asset should be installed into Moodle as:
+
+```text
+local/otasignconnector
+```
 
 ## Database Migrations
 
