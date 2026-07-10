@@ -29,7 +29,8 @@ jobs:
       - name: Extract Moodle plugin version
         id: plugin
         run: |
-          version="$(php -r '$file = file_get_contents("moodle/local_otasignconnector/version.php"); if (!preg_match("/\\$plugin->version\\s*=\\s*([0-9]+);/", $file, $m)) { exit(1); } echo $m[1];')"
+          version="$(sed -n "s/.*\$plugin->version[[:space:]]*=[[:space:]]*\([0-9][0-9]*\);.*/\1/p" moodle/local_otasignconnector/version.php | head -n 1)"
+          test -n "$version"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "zip_name=otasignconnector-${version}.zip" >> "$GITHUB_OUTPUT"
 
