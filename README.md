@@ -72,6 +72,7 @@ ghcr.io/YOUR_GITHUB_ORG/otasign-frontend:latest
 Use `docker-compose.prod.example.yml` as the Portainer stack starting point.
 See `docs/operations.md` for deployment, backup, restore, monitoring, and
 secret rotation procedures.
+Use `.env.prod.example` as the production stack variable template.
 The frontend image is runtime-configurable with:
 
 ```text

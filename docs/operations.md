@@ -21,7 +21,7 @@ OTA Sign production has these critical dependencies:
 5. Confirm the Moodle plugin zip is attached to the GitHub Release as `otasignconnector-vX.Y.Z.zip`.
 6. Set production stack variables in Portainer or the deployment environment:
    - `OTASIGN_IMAGE_TAG`
-   - `OTASIGN_FRONTEND_URL`
+   - `OTASIGN_FRONTEND_URL` for the OTA Sign public URL, also used as frontend `OTASIGN_API_BASE_URL` when backend routes share the same host
    - `MOODLE_LOGIN_URL`
    - `MOODLE_OTA_SIGN_LAUNCH_URL`
    - `MOODLE_LAUNCH_SIGNING_SECRET`
@@ -32,6 +32,7 @@ OTA Sign production has these critical dependencies:
    - `DOCUSEAL_WEBHOOK_SECRET`
    - `NOTIFICATION_WEBHOOK_URL` if used
    - `NOTIFICATION_WEBHOOK_SECRET` if used
+   - Start from `.env.prod.example` when using Docker Compose or Portainer env-file style variables.
 7. Deploy `docker-compose.prod.example.yml` as the production stack.
 8. Confirm `/readyz` returns `200`.
 9. Confirm `/healthz/full` reports database and DocuSeal status.
@@ -54,6 +55,27 @@ The release asset should be installed into Moodle as:
 ```text
 local/otasignconnector
 ```
+
+## Reverse Proxy Routing
+
+The production reverse proxy can point `https://otaportal.operatortraining.academy` to:
+
+```text
+otasign-frontend:80
+```
+
+The frontend nginx image serves the React app and internally proxies these paths to `otasign-backend:8080`:
+
+```text
+/api/*
+/launch
+/webhooks/*
+/healthz
+/healthz/full
+/readyz
+```
+
+Nginx also returns `404` for common probe paths such as `.env`, `.git/config`, `config.json`, `info.php`, and similar scanner targets.
 
 ## Database Migrations
 

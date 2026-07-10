@@ -46,14 +46,13 @@ services:
   otasign-frontend:
     image: ghcr.io/prevail90/otasign-frontend:${OTASIGN_IMAGE_TAG:-latest}
     restart: unless-stopped
-    cap_drop:
-      - ALL
     security_opt:
       - no-new-privileges:true
     tmpfs:
       - /var/cache/nginx:size=64m
       - /var/run:size=16m
     environment:
+      # Browser-facing API base. Frontend nginx proxies /api, /launch, /webhooks, /healthz, and /readyz to otasign-backend.
       OTASIGN_API_BASE_URL: ${OTASIGN_FRONTEND_URL:?set OTASIGN_FRONTEND_URL}
       OTASIGN_MOODLE_LOGIN_URL: ${MOODLE_LOGIN_URL:?set MOODLE_LOGIN_URL}
     expose:
