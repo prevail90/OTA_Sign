@@ -18,7 +18,7 @@ OTA Sign production has these critical dependencies:
 2. Confirm CI passes for backend, frontend, and Moodle plugin checks.
 3. Create and push a version tag such as `v1.0.0`.
 4. Confirm GHCR images exist for the intended `OTASIGN_IMAGE_TAG`.
-5. Confirm the Moodle plugin zip is attached to the GitHub Release as `otasignconnector-vX.Y.Z.zip`.
+5. Confirm the Moodle plugin zip is attached to the GitHub Release as `otasignconnector-YYYYMMDDNN.zip`, matching `$plugin->version`.
 6. Set production stack variables in Portainer or the deployment environment:
    - `OTASIGN_IMAGE_TAG`
    - `OTASIGN_FRONTEND_URL` for the OTA Sign public URL, also used as frontend `OTASIGN_API_BASE_URL` when backend routes share the same host
@@ -41,7 +41,7 @@ OTA Sign production has these critical dependencies:
 
 ## Moodle Plugin Release
 
-Pushing a version tag packages `moodle/local_otasignconnector` as a Moodle-ready zip with this layout:
+Pushing a version tag packages `moodle/local_otasignconnector` as a Moodle-ready zip named from Moodle's `$plugin->version`, for example `otasignconnector-2026071000.zip`, with this layout:
 
 ```text
 otasignconnector/

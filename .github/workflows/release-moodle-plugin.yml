@@ -26,6 +26,13 @@ jobs:
         run: |
           grep -q "\$plugin->component = 'local_otasignconnector';" moodle/local_otasignconnector/version.php
 
+      - name: Extract Moodle plugin version
+        id: plugin
+        run: |
+          version="$(php -r '$file = file_get_contents("moodle/local_otasignconnector/version.php"); if (!preg_match("/\\$plugin->version\\s*=\\s*([0-9]+);/", $file, $m)) { exit(1); } echo $m[1];')"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "zip_name=otasignconnector-${version}.zip" >> "$GITHUB_OUTPUT"
+
       - name: PHP syntax check
         run: find moodle/local_otasignconnector -name '*.php' -print0 | xargs -0 -n1 php -l
 
@@ -34,19 +41,17 @@ jobs:
           mkdir -p dist/moodle-plugin/otasignconnector
           cp -R moodle/local_otasignconnector/. dist/moodle-plugin/otasignconnector/
           cd dist/moodle-plugin
-          zip -r "../otasignconnector-${GITHUB_REF_NAME}.zip" otasignconnector -x '*/.DS_Store'
+          zip -r "../${{ steps.plugin.outputs.zip_name }}" otasignconnector -x '*/.DS_Store'
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: otasignconnector-${{ github.ref_name }}
-          path: dist/otasignconnector-${{ github.ref_name }}.zip
+          name: otasignconnector-${{ steps.plugin.outputs.version }}
+          path: dist/${{ steps.plugin.outputs.zip_name }}
           if-no-files-found: error
 
       - name: Attach plugin zip to GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          name: OTA Sign Connector ${{ github.ref_name }}
-          files: dist/otasignconnector-${{ github.ref_name }}.zip
-          generate_release_notes: true
+          files: dist/${{ steps.plugin.outputs.zip_name }}
