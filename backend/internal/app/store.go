@@ -780,21 +780,42 @@ func (s *Store) CommanderRecipientsForUIC(ctx context.Context, uic string) ([]No
 	return recipients, rows.Err()
 }
 
-func (s *Store) RankAbbreviationForPayGrade(ctx context.Context, serviceBranch string, payGrade string) (string, bool, error) {
-	var rank string
-	err := s.db.QueryRowContext(ctx, `
-		SELECT rank_abbreviation
-		FROM dod_paygrades
-		WHERE lower(service_branch) = lower($1)
-		  AND upper(pay_grade) = upper($2)
-	`, serviceBranch, payGrade).Scan(&rank)
-	if errors.Is(err, sql.ErrNoRows) {
+func (s *Store) PayGradeForRank(ctx context.Context, rank string) (string, bool, error) {
+	rank = strings.TrimSpace(rank)
+	if rank == "" {
 		return "", false, nil
 	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT pay_grade
+		FROM dod_paygrades
+		WHERE upper(rank_abbreviation) = upper($1)
+		ORDER BY pay_grade
+	`, rank)
 	if err != nil {
 		return "", false, err
 	}
-	return rank, true, nil
+	defer rows.Close()
+
+	var payGrades []string
+	for rows.Next() {
+		var payGrade string
+		if err := rows.Scan(&payGrade); err != nil {
+			return "", false, err
+		}
+		payGrades = append(payGrades, payGrade)
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, err
+	}
+	if len(payGrades) == 0 {
+		return "", false, nil
+	}
+	if len(payGrades) > 1 {
+		return "", false, fmt.Errorf("rank %q maps to multiple pay grades: %s", rank, strings.Join(payGrades, ", "))
+	}
+
+	return payGrades[0], true, nil
 }
 
 func (s *Store) SubmissionForUser(ctx context.Context, submissionID string, userID string) (Submission, bool, error) {

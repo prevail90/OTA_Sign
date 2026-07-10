@@ -141,11 +141,11 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		Email:         claims.Email,
 		DoDID:         claims.DoDID,
 		Rank:          claims.Rank,
-		PayGrade:      claims.PayGrade,
 		UIC:           claims.UIC,
 		Roles:         claims.Roles,
 		Capabilities:  claims.Capabilities,
 	}
+	s.enrichPayGradeFromRank(r.Context(), &user)
 
 	sessionID := randomID()
 	if err := s.store.SaveSession(r.Context(), sessionID, user); err != nil {
@@ -173,7 +173,6 @@ func (s *Server) handleDevLaunchToken(w http.ResponseWriter, r *http.Request) {
 		Email:        "demo.soldier@example.mil",
 		DoDID:        "1111222233",
 		Rank:         "SGT",
-		PayGrade:     "E-5",
 		UIC:          "WABC12",
 		Roles:        []string{"student", "commander"},
 		Capabilities: []string{"viewown", "viewunit", "signascommander"},
@@ -262,11 +261,7 @@ func (s *Server) handleCreateSubmission(w http.ResponseWriter, r *http.Request, 
 	}
 
 	prefillUser := user
-	if strings.TrimSpace(prefillUser.Rank) == "" && strings.TrimSpace(prefillUser.PayGrade) != "" {
-		if rank, ok, err := s.store.RankAbbreviationForPayGrade(r.Context(), "Army", prefillUser.PayGrade); err == nil && ok {
-			prefillUser.Rank = rank
-		}
-	}
+	s.enrichPayGradeFromRank(r.Context(), &prefillUser)
 
 	docusealSubmitters := []DocuSealSubmitterRequest{
 		{
@@ -808,6 +803,21 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, sessionID string) {
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int((8 * time.Hour).Seconds()),
 	})
+}
+
+func (s *Server) enrichPayGradeFromRank(ctx context.Context, user *User) {
+	if strings.TrimSpace(user.PayGrade) != "" || strings.TrimSpace(user.Rank) == "" {
+		return
+	}
+
+	payGrade, ok, err := s.store.PayGradeForRank(ctx, user.Rank)
+	if err != nil {
+		log.Printf("derive pay grade from rank %q failed: %v", user.Rank, err)
+		return
+	}
+	if ok {
+		user.PayGrade = payGrade
+	}
 }
 
 func formattedMilitaryName(claims LaunchClaims) string {

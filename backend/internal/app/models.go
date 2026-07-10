@@ -11,7 +11,6 @@ type LaunchClaims struct {
 	Email         string    `json:"email"`
 	DoDID         string    `json:"dod_id,omitempty"`
 	Rank          string    `json:"rank,omitempty"`
-	PayGrade      string    `json:"pay_grade,omitempty"`
 	UIC           string    `json:"uic"`
 	Roles         []string  `json:"roles"`
 	Capabilities  []string  `json:"capabilities"`

@@ -29,6 +29,7 @@ Moodle user clicks a manually configured OTA Sign navbar link
 - Launch signing secret, matching `MOODLE_LAUNCH_SIGNING_SECRET` in the backend
 - UIC custom profile field shortname
 - DoD ID custom profile field shortname
+- Rank custom profile field shortname. OTA Sign derives pay grade from rank using its `dod_paygrades` database table.
 
 ## Moodle Navbar Link
 

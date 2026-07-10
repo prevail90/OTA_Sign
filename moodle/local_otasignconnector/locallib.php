@@ -8,7 +8,6 @@ function local_otasignconnector_build_launch_payload(stdClass $user): array {
     $uicfield = get_config('local_otasignconnector', 'uic_profile_field') ?: 'uic';
     $dodidfield = get_config('local_otasignconnector', 'dodid_profile_field') ?: 'dodid';
     $rankfield = get_config('local_otasignconnector', 'rank_profile_field') ?: 'rank';
-    $paygradefield = get_config('local_otasignconnector', 'paygrade_profile_field') ?: 'paygrade';
 
     $payload = [
         'moodle_user_id' => (string)$user->id,
@@ -19,7 +18,6 @@ function local_otasignconnector_build_launch_payload(stdClass $user): array {
         'email' => (string)$user->email,
         'dod_id' => local_otasignconnector_profile_value($user, $dodidfield),
         'rank' => local_otasignconnector_profile_value($user, $rankfield),
-        'pay_grade' => local_otasignconnector_profile_value($user, $paygradefield),
         'uic' => local_otasignconnector_profile_value($user, $uicfield),
         'roles' => local_otasignconnector_user_roles($user),
         'capabilities' => local_otasignconnector_user_capabilities($user),

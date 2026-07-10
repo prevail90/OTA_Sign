@@ -48,13 +48,5 @@ if ($hassiteconfig) {
         PARAM_ALPHANUMEXT
     ));
 
-    $settings->add(new admin_setting_configtext(
-        'local_otasignconnector/paygrade_profile_field',
-        get_string('paygrade_profile_field', 'local_otasignconnector'),
-        get_string('paygrade_profile_field_desc', 'local_otasignconnector'),
-        'paygrade',
-        PARAM_ALPHANUMEXT
-    ));
-
     $ADMIN->add('localplugins', $settings);
 }
