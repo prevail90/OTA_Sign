@@ -691,6 +691,7 @@ func (s *Store) NotificationSubmissionByDocuSealID(ctx context.Context, docuseal
 			coalesce(u.dod_id, ''),
 			un.uic,
 			s.status,
+			t.requires_commander_signature,
 			coalesce(s.docuseal_submission_id, '')
 		FROM submissions s
 		JOIN templates t ON t.id = s.template_id
@@ -706,6 +707,7 @@ func (s *Store) NotificationSubmissionByDocuSealID(ctx context.Context, docuseal
 		&submission.SoldierDoDID,
 		&submission.UIC,
 		&submission.Status,
+		&submission.RequiresCommander,
 		&submission.DocuSealSubmissionID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {

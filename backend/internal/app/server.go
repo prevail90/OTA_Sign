@@ -594,7 +594,7 @@ func (s *Server) notifyCommanderSignatureRequested(ctx context.Context, docuseal
 		log.Printf("load commander notification context failed: %v", err)
 		return
 	}
-	if !ok || submission.Status != "pending" {
+	if !ok || submission.Status != "pending" || !submission.RequiresCommander {
 		return
 	}
 

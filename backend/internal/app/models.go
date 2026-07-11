@@ -70,14 +70,16 @@ type SoldierSubmissionGroup struct {
 }
 
 type NotificationSubmission struct {
-	ID                   string `json:"id"`
-	TemplateID           string `json:"template_id"`
-	TemplateName         string `json:"template_name"`
-	SoldierName          string `json:"soldier_name"`
-	SoldierEmail         string `json:"soldier_email"`
-	SoldierDoDID         string `json:"soldier_dod_id,omitempty"`
-	UIC                  string `json:"uic"`
-	Status               string `json:"status"`
+	ID                string `json:"id"`
+	TemplateID        string `json:"template_id"`
+	TemplateName      string `json:"template_name"`
+	SoldierName       string `json:"soldier_name"`
+	SoldierEmail      string `json:"soldier_email"`
+	SoldierDoDID      string `json:"soldier_dod_id,omitempty"`
+	UIC               string `json:"uic"`
+	Status            string `json:"status"`
+	RequiresCommander bool   `json:"requires_commander"`
+
 	DocuSealSubmissionID string `json:"docuseal_submission_id"`
 }
 
