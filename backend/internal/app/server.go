@@ -1,6 +1,8 @@
 package app
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -12,6 +14,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -56,9 +59,11 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/submissions", s.withAuth(s.handleCreateSubmission))
 	mux.HandleFunc("POST /api/submissions/{id}/commander-sign", s.withAuth(s.handleCommanderSign))
 	mux.HandleFunc("GET /api/submissions/{id}/download", s.withAuth(s.handleDownloadSubmission))
+	mux.HandleFunc("GET /api/submissions/{id}/view", s.withAuth(s.handleViewSubmission))
 	mux.HandleFunc("DELETE /api/submissions/{id}", s.withAuth(s.handleDeleteSubmission))
 	mux.HandleFunc("GET /api/my/submissions", s.withAuth(s.handleMySubmissions))
 	mux.HandleFunc("GET /api/unit/submissions", s.withAuth(s.handleUnitSubmissions))
+	mux.HandleFunc("GET /api/unit/soldiers/{id}/download", s.withAuth(s.handleDownloadSoldierSubmissions))
 
 	return s.withHTTPS(s.withCORS(mux))
 }
@@ -139,6 +144,7 @@ func (s *Server) handleLaunch(w http.ResponseWriter, r *http.Request) {
 		LastName:      claims.LastName,
 		MiddleInitial: claims.MiddleInitial,
 		Email:         claims.Email,
+		ArmyEmail:     validArmyEmail(claims.ArmyEmail),
 		DoDID:         claims.DoDID,
 		Rank:          claims.Rank,
 		UIC:           claims.UIC,
@@ -171,6 +177,7 @@ func (s *Server) handleDevLaunchToken(w http.ResponseWriter, r *http.Request) {
 		FirstName:    "Demo",
 		LastName:     "Soldier",
 		Email:        "demo.soldier@example.mil",
+		ArmyEmail:    "demo.soldier@army.mil",
 		DoDID:        "1111222233",
 		Rank:         "SGT",
 		UIC:          "WABC12",
@@ -318,6 +325,14 @@ func (s *Server) handleCreateSubmission(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) handleDownloadSubmission(w http.ResponseWriter, r *http.Request, user User) {
+	s.handleSubmissionDocument(w, r, user, true)
+}
+
+func (s *Server) handleViewSubmission(w http.ResponseWriter, r *http.Request, user User) {
+	s.handleSubmissionDocument(w, r, user, false)
+}
+
+func (s *Server) handleSubmissionDocument(w http.ResponseWriter, r *http.Request, user User, attachment bool) {
 	submissionID := strings.TrimSpace(r.PathValue("id"))
 	if submissionID == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "submission id is required"})
@@ -343,42 +358,128 @@ func (s *Server) handleDownloadSubmission(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	documents, err := s.docuseal.GetSubmissionDocuments(r.Context(), download.DocuSealSubmissionID, true)
+	body, contentType, err := s.downloadSubmissionPDF(r.Context(), download)
 	if errors.Is(err, ErrDocuSealNotConfigured) {
 		writeJSON(w, http.StatusFailedDependency, map[string]string{"error": "docuseal is not configured"})
 		return
 	}
 	if errors.Is(err, ErrDocuSealNotFound) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "docuseal documents not found"})
-		return
-	}
-	if err != nil {
-		log.Printf("docuseal get documents failed: %v", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not load docuseal documents"})
-		return
-	}
-	if len(documents) == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "docuseal documents not found"})
-		return
-	}
-
-	body, contentType, err := s.docuseal.DownloadDocument(r.Context(), documents[0].URL)
-	if errors.Is(err, ErrDocuSealNotFound) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "docuseal document not found"})
 		return
 	}
 	if err != nil {
-		log.Printf("docuseal download document failed: %v", err)
+		log.Printf("docuseal document download failed: %v", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not download docuseal document"})
 		return
 	}
 
 	filename := safePDFName(download.TemplateName)
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	disposition := "inline"
+	if attachment {
+		disposition = "attachment"
+	}
+	w.Header().Set("Content-Disposition", disposition+`; filename="`+filename+`"`)
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
+}
+
+func (s *Server) handleDownloadSoldierSubmissions(w http.ResponseWriter, r *http.Request, user User) {
+	if !hasAny(user.Capabilities, "viewunit") {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not authorized to view unit submissions"})
+		return
+	}
+
+	soldierUserID := strings.TrimSpace(r.PathValue("id"))
+	if soldierUserID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "soldier id is required"})
+		return
+	}
+
+	downloads, ok, err := s.store.SoldierSubmissionDownloadsForUser(r.Context(), soldierUserID, user)
+	if err != nil {
+		log.Printf("load soldier submission downloads failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not load soldier submissions"})
+		return
+	}
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "soldier not found"})
+		return
+	}
+	if len(downloads) == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no completed submissions available"})
+		return
+	}
+
+	var buffer bytes.Buffer
+	zipWriter := zip.NewWriter(&buffer)
+	usedNames := map[string]int{}
+	added := 0
+	for _, download := range downloads {
+		if download.DocuSealSubmissionID == "" {
+			continue
+		}
+
+		body, _, err := s.downloadSubmissionPDF(r.Context(), download)
+		if errors.Is(err, ErrDocuSealNotConfigured) {
+			_ = zipWriter.Close()
+			writeJSON(w, http.StatusFailedDependency, map[string]string{"error": "docuseal is not configured"})
+			return
+		}
+		if errors.Is(err, ErrDocuSealNotFound) {
+			continue
+		}
+		if err != nil {
+			_ = zipWriter.Close()
+			log.Printf("download soldier submission document failed: %v", err)
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "could not download all submissions"})
+			return
+		}
+
+		filename := uniqueArchiveName(usedNames, safePDFName(download.TemplateName))
+		fileWriter, err := zipWriter.Create(filename)
+		if err != nil {
+			_ = zipWriter.Close()
+			log.Printf("create zip entry failed: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create zip file"})
+			return
+		}
+		if _, err := fileWriter.Write(body); err != nil {
+			_ = zipWriter.Close()
+			log.Printf("write zip entry failed: %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create zip file"})
+			return
+		}
+		added++
+	}
+	if err := zipWriter.Close(); err != nil {
+		log.Printf("close zip failed: %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create zip file"})
+		return
+	}
+	if added == 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no completed documents available"})
+		return
+	}
+
+	filename := safeArchiveName(downloads[0].SoldierName)
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(buffer.Bytes())
+}
+
+func (s *Server) downloadSubmissionPDF(ctx context.Context, download SubmissionDownload) ([]byte, string, error) {
+	documents, err := s.docuseal.GetSubmissionDocuments(ctx, download.DocuSealSubmissionID, true)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(documents) == 0 {
+		return nil, "", ErrDocuSealNotFound
+	}
+	return s.docuseal.DownloadDocument(ctx, documents[0].URL)
 }
 
 func (s *Server) handleCommanderSign(w http.ResponseWriter, r *http.Request, user User) {
@@ -406,7 +507,7 @@ func (s *Server) handleCommanderSign(w http.ResponseWriter, r *http.Request, use
 
 	result, err := s.docuseal.UpdateSubmitter(r.Context(), docusealSubmitterID, DocuSealSubmitterRequest{
 		Name:       user.FullName,
-		Email:      user.Email,
+		Email:      commanderEmail(user),
 		ExternalID: user.ID,
 		Metadata: map[string]string{
 			"otasign_user_id":       user.ID,
@@ -751,6 +852,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
+			w.Header().Set("Access-Control-Expose-Headers", "Content-Disposition")
 		}
 
 		if r.Method == http.MethodOptions {
@@ -913,6 +1015,43 @@ func safePDFName(name string) string {
 		filename = "otasign-submission"
 	}
 	return filename + ".pdf"
+}
+
+func safeArchiveName(name string) string {
+	name = strings.TrimSuffix(safePDFName(name), ".pdf")
+	if name == "otasign-submission" {
+		name = "otasign-documents"
+	}
+	return name + "-forms.zip"
+}
+
+func commanderEmail(user User) string {
+	if user.ArmyEmail != "" {
+		return user.ArmyEmail
+	}
+	return user.Email
+}
+
+func validArmyEmail(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	localPart := strings.TrimSuffix(email, "@army.mil")
+	if localPart != "" && strings.HasSuffix(email, "@army.mil") && !strings.ContainsAny(email, " \t\r\n") && strings.Count(email, "@") == 1 {
+		return email
+	}
+	return ""
+}
+
+func uniqueArchiveName(used map[string]int, name string) string {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	ext := filepath.Ext(name)
+	if base == "" {
+		base = "otasign-submission"
+	}
+	used[name]++
+	if used[name] == 1 {
+		return name
+	}
+	return base + "-" + strconv.Itoa(used[name]) + ext
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

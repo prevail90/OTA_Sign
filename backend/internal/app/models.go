@@ -9,6 +9,7 @@ type LaunchClaims struct {
 	LastName      string    `json:"last_name,omitempty"`
 	MiddleInitial string    `json:"middle_initial,omitempty"`
 	Email         string    `json:"email"`
+	ArmyEmail     string    `json:"army_email,omitempty"`
 	DoDID         string    `json:"dod_id,omitempty"`
 	Rank          string    `json:"rank,omitempty"`
 	UIC           string    `json:"uic"`
@@ -26,6 +27,7 @@ type User struct {
 	LastName      string   `json:"last_name,omitempty"`
 	MiddleInitial string   `json:"middle_initial,omitempty"`
 	Email         string   `json:"email"`
+	ArmyEmail     string   `json:"army_email,omitempty"`
 	DoDID         string   `json:"dod_id,omitempty"`
 	Rank          string   `json:"rank,omitempty"`
 	PayGrade      string   `json:"pay_grade,omitempty"`
@@ -93,6 +95,7 @@ type NotificationRecipient struct {
 type SubmissionDownload struct {
 	SubmissionID          string
 	TemplateName          string
+	SoldierName           string
 	Status                string
 	DocuSealSubmissionID  string
 	DocuSealDocumentURL   string

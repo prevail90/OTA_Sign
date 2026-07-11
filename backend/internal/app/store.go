@@ -165,23 +165,25 @@ func (s *Store) SaveSession(ctx context.Context, sessionID string, user User) er
 			last_name,
 			middle_initial,
 			email,
+			army_email,
 			dod_id,
 			rank,
 			pay_grade
 		)
-		VALUES ($1, $2, nullif($3, ''), nullif($4, ''), nullif($5, ''), $6, nullif($7, ''), nullif($8, ''), nullif($9, ''))
+		VALUES ($1, $2, nullif($3, ''), nullif($4, ''), nullif($5, ''), $6, nullif($7, ''), nullif($8, ''), nullif($9, ''), nullif($10, ''))
 		ON CONFLICT (moodle_user_id) DO UPDATE SET
 			full_name = EXCLUDED.full_name,
 			first_name = EXCLUDED.first_name,
 			last_name = EXCLUDED.last_name,
 			middle_initial = EXCLUDED.middle_initial,
 			email = EXCLUDED.email,
+			army_email = EXCLUDED.army_email,
 			dod_id = EXCLUDED.dod_id,
 			rank = EXCLUDED.rank,
 			pay_grade = EXCLUDED.pay_grade,
 			updated_at = now()
 		RETURNING id::text
-	`, user.MoodleUserID, user.FullName, user.FirstName, user.LastName, user.MiddleInitial, user.Email, user.DoDID, user.Rank, user.PayGrade).Scan(&userID); err != nil {
+	`, user.MoodleUserID, user.FullName, user.FirstName, user.LastName, user.MiddleInitial, user.Email, user.ArmyEmail, user.DoDID, user.Rank, user.PayGrade).Scan(&userID); err != nil {
 		return err
 	}
 
@@ -245,6 +247,7 @@ func (s *Store) UserForSession(ctx context.Context, sessionID string) (User, boo
 			coalesce(u.last_name, ''),
 			coalesce(u.middle_initial, ''),
 			u.email,
+			coalesce(u.army_email, ''),
 			coalesce(u.dod_id, ''),
 			coalesce(u.rank, ''),
 			coalesce(u.pay_grade, ''),
@@ -267,6 +270,7 @@ func (s *Store) UserForSession(ctx context.Context, sessionID string) (User, boo
 		&user.LastName,
 		&user.MiddleInitial,
 		&user.Email,
+		&user.ArmyEmail,
 		&user.DoDID,
 		&user.Rank,
 		&user.PayGrade,
@@ -753,16 +757,28 @@ func (s *Store) SubmissionSignerRecipients(ctx context.Context, submissionID str
 
 func (s *Store) CommanderRecipientsForUIC(ctx context.Context, uic string) ([]NotificationRecipient, error) {
 	rows, err := s.db.QueryContext(ctx, `
+		WITH commander_recipients AS (
+			SELECT DISTINCT
+				u.full_name,
+				CASE
+					WHEN lower(trim(coalesce(u.army_email, ''))) LIKE '_%@army.mil' THEN lower(trim(u.army_email))
+					WHEN lower(trim(u.email)) LIKE '_%@army.mil' THEN lower(trim(u.email))
+					ELSE ''
+				END AS email,
+				un.uic
+			FROM users u
+			JOIN user_unit_roles uur ON uur.user_id = u.id
+			JOIN units un ON un.id = uur.unit_id
+			WHERE un.uic = $1
+			  AND lower(uur.role) = 'capability:signascommander'
+		)
 		SELECT DISTINCT
-			u.full_name,
-			u.email,
-			un.uic
-		FROM users u
-		JOIN user_unit_roles uur ON uur.user_id = u.id
-		JOIN units un ON un.id = uur.unit_id
-		WHERE un.uic = $1
-		  AND lower(uur.role) = 'capability:signascommander'
-		ORDER BY u.full_name, u.email
+			full_name,
+			email,
+			uic
+		FROM commander_recipients
+		WHERE email <> ''
+		ORDER BY full_name, email
 	`, uic)
 	if err != nil {
 		return nil, err
@@ -852,13 +868,15 @@ func (s *Store) SubmissionDownloadForUser(ctx context.Context, submissionID stri
 	var download SubmissionDownload
 
 	err := s.db.QueryRowContext(ctx, `
-		SELECT
+		SELECT DISTINCT
 			s.id::text,
 			t.name,
+			u.full_name,
 			s.status,
 			coalesce(s.docuseal_submission_id, '')
 		FROM submissions s
 		JOIN templates t ON t.id = s.template_id
+		JOIN users u ON u.id = s.soldier_user_id
 		JOIN units un ON un.id = s.unit_id
 		WHERE s.id = $1::uuid
 		  AND (
@@ -871,6 +889,7 @@ func (s *Store) SubmissionDownloadForUser(ctx context.Context, submissionID stri
 	`, submissionID, user.ID, user.UIC, hasAny(user.Capabilities, "viewunit")).Scan(
 		&download.SubmissionID,
 		&download.TemplateName,
+		&download.SoldierName,
 		&download.Status,
 		&download.DocuSealSubmissionID,
 	)
@@ -882,6 +901,65 @@ func (s *Store) SubmissionDownloadForUser(ctx context.Context, submissionID stri
 	}
 
 	return download, true, nil
+}
+
+func (s *Store) SoldierSubmissionDownloadsForUser(ctx context.Context, soldierUserID string, user User) ([]SubmissionDownload, bool, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT
+			s.id::text,
+			t.name,
+			u.full_name,
+			s.status,
+			coalesce(s.docuseal_submission_id, '')
+		FROM users u
+		JOIN user_unit_roles uur ON uur.user_id = u.id
+		JOIN units un ON un.id = uur.unit_id
+		LEFT JOIN submissions s ON s.soldier_user_id = u.id
+			AND s.status = 'complete'
+		LEFT JOIN templates t ON t.id = s.template_id
+		WHERE u.id = $1::uuid
+		  AND un.uic = $2
+		  AND $3
+		ORDER BY t.name NULLS LAST
+	`, soldierUserID, user.UIC, hasAny(user.Capabilities, "viewunit"))
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	foundSoldier := false
+	var downloads []SubmissionDownload
+	for rows.Next() {
+		foundSoldier = true
+
+		var download SubmissionDownload
+		var submissionID sql.NullString
+		var templateName sql.NullString
+		var status sql.NullString
+		var docusealSubmissionID sql.NullString
+		if err := rows.Scan(
+			&submissionID,
+			&templateName,
+			&download.SoldierName,
+			&status,
+			&docusealSubmissionID,
+		); err != nil {
+			return nil, false, err
+		}
+		if !submissionID.Valid {
+			continue
+		}
+		download.SubmissionID = submissionID.String
+		download.TemplateName = templateName.String
+		download.Status = status.String
+		download.DocuSealSubmissionID = docusealSubmissionID.String
+		downloads = append(downloads, download)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+
+	return downloads, foundSoldier, nil
 }
 
 func (s *Store) CommanderSignerForSubmission(ctx context.Context, submissionID string, user User) (Submission, string, bool, error) {

@@ -382,22 +382,33 @@ h1 {
 .soldierHeader {
   align-items: center;
   background: var(--card);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr auto;
+  min-height: 54px;
+  padding: 12px 14px;
+  width: 100%;
+}
+
+.soldierToggle {
+  align-items: center;
+  background: transparent;
   border: 0;
+  color: var(--text);
   cursor: pointer;
   display: grid;
   gap: 10px;
   grid-template-columns: 24px 1fr auto;
-  min-height: 54px;
-  padding: 12px 14px;
+  min-height: 38px;
+  padding: 0;
   text-align: left;
-  width: 100%;
 }
 
-.soldierHeader span {
+.soldierToggle span {
   font-weight: 800;
 }
 
-.soldierHeader small {
+.soldierToggle small {
   color: var(--muted);
 }
 

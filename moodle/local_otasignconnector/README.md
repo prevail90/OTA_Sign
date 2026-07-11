@@ -30,6 +30,7 @@ Moodle user clicks a manually configured OTA Sign navbar link
 - UIC custom profile field shortname
 - DoD ID custom profile field shortname
 - Rank custom profile field shortname. OTA Sign derives pay grade from rank using its `dod_paygrades` database table.
+- Army email custom profile field shortname. Commander notifications prefer this value when it ends in `@army.mil`; if it is empty, OTA Sign uses the regular Moodle email only when that also ends in `@army.mil`.
 
 ## Moodle Navbar Link
 

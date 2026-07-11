@@ -84,6 +84,7 @@ function App() {
   const [busyTemplateID, setBusyTemplateID] = React.useState<string | null>(null);
   const [busySubmissionID, setBusySubmissionID] = React.useState<string | null>(null);
   const [busyDownloadSubmissionID, setBusyDownloadSubmissionID] = React.useState<string | null>(null);
+  const [busyDownloadSoldierID, setBusyDownloadSoldierID] = React.useState<string | null>(null);
   const [busyCommanderSubmissionID, setBusyCommanderSubmissionID] = React.useState<string | null>(null);
   const [themePreference, setThemePreference] = React.useState<ThemePreference>(() => readThemePreference());
 
@@ -216,6 +217,19 @@ function App() {
       .finally(() => setBusyDownloadSubmissionID(null));
   }, []);
 
+  const viewSubmission = React.useCallback((submissionID: string) => {
+    window.open(`${API_BASE}/api/submissions/${encodeURIComponent(submissionID)}/view`, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const downloadSoldierSubmissions = React.useCallback((soldierUserID: string) => {
+    setActionError(null);
+    setBusyDownloadSoldierID(soldierUserID);
+
+    downloadFile(`/api/unit/soldiers/${encodeURIComponent(soldierUserID)}/download`)
+      .catch((err) => setActionError(err instanceof Error ? err.message : 'Could not download soldier forms.'))
+      .finally(() => setBusyDownloadSoldierID(null));
+  }, []);
+
   const signAsCommander = React.useCallback(
     (submissionID: string) => {
       setActionError(null);
@@ -300,9 +314,12 @@ function App() {
           setSearch={setSearch}
           canSignCommander={canSignCommander}
           busyDownloadSubmissionID={busyDownloadSubmissionID}
+          busyDownloadSoldierID={busyDownloadSoldierID}
           busyCommanderSubmissionID={busyCommanderSubmissionID}
           signAsCommander={signAsCommander}
+          viewSubmission={viewSubmission}
           downloadSubmission={downloadSubmission}
+          downloadSoldierSubmissions={downloadSoldierSubmissions}
         />
       )}
     </main>
@@ -473,18 +490,24 @@ function UnitForms({
   setSearch,
   canSignCommander,
   busyDownloadSubmissionID,
+  busyDownloadSoldierID,
   busyCommanderSubmissionID,
   signAsCommander,
+  viewSubmission,
   downloadSubmission,
+  downloadSoldierSubmissions,
 }: {
   groups: SoldierSubmissionGroup[];
   search: string;
   setSearch: (value: string) => void;
   canSignCommander: boolean;
   busyDownloadSubmissionID: string | null;
+  busyDownloadSoldierID: string | null;
   busyCommanderSubmissionID: string | null;
   signAsCommander: (submissionID: string) => void;
+  viewSubmission: (submissionID: string) => void;
   downloadSubmission: (submissionID: string) => void;
+  downloadSoldierSubmissions: (soldierUserID: string) => void;
 }) {
   const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({});
 
@@ -508,21 +531,34 @@ function UnitForms({
       <div className="soldierList">
         {groups.map((group) => {
           const isCollapsed = collapsed[group.soldier_user_id];
+          const completedSubmissions = group.submissions.filter((submission) => submission.status === 'complete');
           return (
             <article className="soldierGroup" key={group.soldier_user_id}>
-              <button
-                className="soldierHeader"
-                onClick={() =>
-                  setCollapsed((current) => ({
-                    ...current,
-                    [group.soldier_user_id]: !current[group.soldier_user_id],
-                  }))
-                }
-              >
-                {isCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
-                <span>{group.soldier_name}</span>
-                <small>{group.soldier_dod_id}</small>
-              </button>
+              <div className="soldierHeader">
+                <button
+                  className="soldierToggle"
+                  onClick={() =>
+                    setCollapsed((current) => ({
+                      ...current,
+                      [group.soldier_user_id]: !current[group.soldier_user_id],
+                    }))
+                  }
+                >
+                  {isCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+                  <span>{group.soldier_name}</span>
+                  <small>{group.soldier_dod_id}</small>
+                </button>
+                {completedSubmissions.length > 0 && (
+                  <button
+                    className="iconButton"
+                    disabled={busyDownloadSoldierID === group.soldier_user_id}
+                    onClick={() => downloadSoldierSubmissions(group.soldier_user_id)}
+                  >
+                    <Download size={16} />
+                    {busyDownloadSoldierID === group.soldier_user_id ? 'Downloading...' : 'Download all'}
+                  </button>
+                )}
+              </div>
               {!isCollapsed && (
                 <div className="submissionTable">
                   {group.submissions.map((submission) => (
@@ -544,14 +580,20 @@ function UnitForms({
                           </button>
                         )}
                         {submission.status === 'complete' && (
-                          <button
-                            className="iconButton"
-                            disabled={busyDownloadSubmissionID === submission.id}
-                            onClick={() => downloadSubmission(submission.id)}
-                          >
-                            <Download size={16} />
-                            {busyDownloadSubmissionID === submission.id ? 'Downloading...' : 'Download'}
-                          </button>
+                          <>
+                            <button className="iconButton" onClick={() => viewSubmission(submission.id)}>
+                              <ExternalLink size={16} />
+                              View
+                            </button>
+                            <button
+                              className="iconButton"
+                              disabled={busyDownloadSubmissionID === submission.id}
+                              onClick={() => downloadSubmission(submission.id)}
+                            >
+                              <Download size={16} />
+                              {busyDownloadSubmissionID === submission.id ? 'Downloading...' : 'Download'}
+                            </button>
+                          </>
                         )}
                       </div>
                     </div>

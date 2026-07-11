@@ -8,6 +8,8 @@ function local_otasignconnector_build_launch_payload(stdClass $user): array {
     $uicfield = get_config('local_otasignconnector', 'uic_profile_field') ?: 'uic';
     $dodidfield = get_config('local_otasignconnector', 'dodid_profile_field') ?: 'dodid';
     $rankfield = get_config('local_otasignconnector', 'rank_profile_field') ?: 'rank';
+    $armyemailfield = get_config('local_otasignconnector', 'army_email_profile_field') ?: 'armyemail';
+    $armyemail = local_otasignconnector_army_email($user, $armyemailfield);
 
     $payload = [
         'moodle_user_id' => (string)$user->id,
@@ -16,6 +18,7 @@ function local_otasignconnector_build_launch_payload(stdClass $user): array {
         'last_name' => trim((string)($user->lastname ?? '')),
         'middle_initial' => local_otasignconnector_middle_initial($user),
         'email' => (string)$user->email,
+        'army_email' => $armyemail,
         'dod_id' => local_otasignconnector_profile_value($user, $dodidfield),
         'rank' => local_otasignconnector_profile_value($user, $rankfield),
         'uic' => local_otasignconnector_profile_value($user, $uicfield),
@@ -68,6 +71,25 @@ function local_otasignconnector_profile_value(stdClass $user, string $shortname)
     }
 
     return trim(preg_replace('/\s+/', ' ', strip_tags((string)$value)));
+}
+
+function local_otasignconnector_army_email(stdClass $user, string $shortname): string {
+    $customemail = local_otasignconnector_profile_value($user, $shortname);
+    if (local_otasignconnector_is_army_email($customemail)) {
+        return strtolower($customemail);
+    }
+
+    $profileemail = trim((string)($user->email ?? ''));
+    if (local_otasignconnector_is_army_email($profileemail)) {
+        return strtolower($profileemail);
+    }
+
+    return '';
+}
+
+function local_otasignconnector_is_army_email(string $email): bool {
+    $email = strtolower(trim($email));
+    return $email !== '' && preg_match('/^[^@\s]+@army\.mil$/', $email) === 1;
 }
 
 function local_otasignconnector_user_roles(stdClass $user): array {

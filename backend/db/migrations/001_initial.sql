@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name TEXT,
     middle_initial TEXT,
     email TEXT NOT NULL,
+    army_email TEXT,
     dod_id TEXT,
     rank TEXT,
     pay_grade TEXT,
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_name TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS middle_initial TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS army_email TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS rank TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pay_grade TEXT;
 
